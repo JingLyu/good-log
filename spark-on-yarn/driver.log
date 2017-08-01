@@ -1,4 +1,7 @@
 16/10/30 23:19:32 INFO SparkContext: Running Spark version 2.0.0
+
+logInfo(s"Running Spark version $SPARK_VERSION")
+
 16/10/30 23:19:33 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 16/10/30 23:19:33 INFO SecurityManager: Changing view acls to: spiderdt
 16/10/30 23:19:33 INFO SecurityManager: Changing modify acls to: spiderdt
@@ -42,6 +45,13 @@
 16/10/30 23:19:33 INFO Utils: Successfully started service 'SparkUI' on port 4040.
 16/10/30 23:19:33 INFO SparkUI: Bound SparkUI to 0.0.0.0, and started at http://192.168.1.2:4040
 16/10/30 23:19:33 INFO SparkContext: Added JAR file:/home/spiderdt/work/git/spiderdt-release/var/jar/spark_etl_expr.jar at spark://192.168.1.2:33905/jars/spark_etl_expr.jar with timestamp 1477840773777
+
+   // Add each JAR given through the constructor
+    if (jars != null) {
+      jars.foreach(addJar)
+    }
+
+
 16/10/30 23:19:34 INFO RMProxy: Connecting to ResourceManager at /192.168.1.3:8032
 16/10/30 23:19:34 INFO Client: Requesting a new application from cluster with 4 NodeManagers
 16/10/30 23:19:34 INFO Client: Verifying our application has not requested more than the maximum memory capability of the cluster (16384 MB per container)
