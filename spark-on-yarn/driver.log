@@ -44,6 +44,12 @@ logInfo(s"Running Spark version $SPARK_VERSION")
 16/10/30 23:19:33 INFO Server: Started @16838ms
 16/10/30 23:19:33 INFO Utils: Successfully started service 'SparkUI' on port 4040.
 16/10/30 23:19:33 INFO SparkUI: Bound SparkUI to 0.0.0.0, and started at http://192.168.1.2:4040
+
+    // Bind the UI before starting the task scheduler to communicate
+    // the bound port to the cluster manager properly
+    _ui.foreach(_.bind())
+
+
 16/10/30 23:19:33 INFO SparkContext: Added JAR file:/home/spiderdt/work/git/spiderdt-release/var/jar/spark_etl_expr.jar at spark://192.168.1.2:33905/jars/spark_etl_expr.jar with timestamp 1477840773777
 
    // Add each JAR given through the constructor
@@ -53,25 +59,175 @@ logInfo(s"Running Spark version $SPARK_VERSION")
 
 
 16/10/30 23:19:34 INFO RMProxy: Connecting to ResourceManager at /192.168.1.3:8032
+
+
+
+
+
+
+
+
 16/10/30 23:19:34 INFO Client: Requesting a new application from cluster with 4 NodeManagers
+
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.deploy.yarn.Client.scala
+
+
+How is yarn client invoked???  
+1)in cluster mode, yarn.Client is passed into childMainClass
+2)in client mode, it's invoked by submitApplication
+
+  def main(argStrings: Array[String]) {
+    if (!sys.props.contains("SPARK_SUBMIT")) {
+      logWarning("WARNING: This client is deprecated and will be removed in a " +
+        "future version of Spark. Use ./bin/spark-submit with \"--master yarn\"")
+    }
+
+    // Set an env variable indicating we are running in YARN mode.
+    // Note that any env variable with the SPARK_ prefix gets propagated to all (remote) processes
+    System.setProperty("SPARK_YARN_MODE", "true")
+    val sparkConf = new SparkConf
+    // SparkSubmit would use yarn cache to distribute files & jars in yarn mode,
+    // so remove them from sparkConf here for yarn mode.
+    sparkConf.remove("spark.jars")
+    sparkConf.remove("spark.files")
+    val args = new ClientArguments(argStrings)
+    new Client(args, sparkConf).run()
+  }
+
+
+
+
+
+  def submitApplication(): ApplicationId = {
+..........
+      logInfo("Requesting a new application from cluster with %d NodeManagers"
+.......
+
 16/10/30 23:19:34 INFO Client: Verifying our application has not requested more than the maximum memory capability of the cluster (16384 MB per container)
+
+//invoked in the sumbitApplication function.
+  private def verifyClusterResources(newAppResponse: GetNewApplicationResponse): Unit = {
+    val maxMem = newAppResponse.getMaximumResourceCapability().getMemory()
+    logInfo("Verifying our application has not requested more than the maximum " +
+
+
 16/10/30 23:19:34 INFO Client: Will allocate AM container, with 896 MB memory including 384 MB overhead
+     Still in the verifyClusterResources funcation
+     logInfo("Will allocate AM container, with %d MB memory including %d MB overhead".format(
+
 16/10/30 23:19:34 INFO Client: Setting up container launch context for our AM
+  private def createContainerLaunchContext(newAppResponse: GetNewApplicationResponse)
+    : ContainerLaunchContext = {
+    logInfo("Setting up container launch context for our AM")
+    val appId = newAppResponse.getApplicationId
+
 16/10/30 23:19:34 INFO Client: Setting up the launch environment for our AM container
+ /**
+   * Set up the environment for launching our ApplicationMaster container.
+   */
+  private def setupLaunchEnv(
+      stagingDirPath: Path,
+      pySparkArchives: Seq[String]): HashMap[String, String] = {
+    logInfo("Setting up the launch environment for our AM container")
+    val env = new HashMap[String, String]()
+
+
+
 16/10/30 23:19:34 INFO Client: Preparing resources for our AM container
+  /**
+   * Upload any resources to the distributed cache if needed. If a resource is intended to be
+   * consumed locally, set up the appropriate config for downstream code to handle it properly.
+   * This is used for setting up a container launch context for our ApplicationMaster.
+   * Exposed for testing.
+   */
+  def prepareLocalResources(
+      destDir: Path,
+      pySparkArchives: Seq[String]): HashMap[String, LocalResource] = {
+    logInfo("Preparing resources for our AM container")
+    // Upload Spark and the application JAR to the remote file system if necessary,
+
+
+
 16/10/30 23:19:34 WARN Client: Neither spark.yarn.jars nor spark.yarn.archive is set, falling back to uploading libraries under SPARK_HOME.
 16/10/30 23:19:35 INFO Client: Uploading resource file:/tmp/spark-b6bed7cd-1a0f-4aa4-a424-556ba82d56d7/__spark_libs__9143566257056696320.zip -> hdfs://192.168.1.3:9000/user/spiderdt/.sparkStaging/application_1473739536361_0484/__spark_libs__9143566257056696320.zip
 16/10/30 23:19:37 INFO Client: Uploading resource file:/home/spiderdt/work/git/spiderdt-release/data-platform/target/groovy-all-2.4.7.jar -> hdfs://192.168.1.3:9000/user/spiderdt/.sparkStaging/application_1473739536361_0484/groovy-all-2.4.7.jar
 16/10/30 23:19:37 INFO Client: Uploading resource file:/tmp/spark-b6bed7cd-1a0f-4aa4-a424-556ba82d56d7/__spark_conf__3836341324529471906.zip -> hdfs://192.168.1.3:9000/user/spiderdt/.sparkStaging/application_1473739536361_0484/__spark_conf__.zip
+  private[yarn] def copyFileToRemote(
+
 16/10/30 23:19:37 INFO SecurityManager: Changing view acls to: spiderdt
 16/10/30 23:19:37 INFO SecurityManager: Changing modify acls to: spiderdt
 16/10/30 23:19:37 INFO SecurityManager: Changing view acls groups to: 
 16/10/30 23:19:37 INFO SecurityManager: Changing modify acls groups to: 
 16/10/30 23:19:37 INFO SecurityManager: SecurityManager: authentication disabled; ui acls disabled; users  with view permissions: Set(spiderdt); groups with view permissions: Set(); users  with modify permissions: Set(spiderdt); groups with modify permissions: Set()
 16/10/30 23:19:37 INFO Client: Submitting application application_1473739536361_0484 to ResourceManager
+
+      // Finally, submit and monitor the application
+      logInfo(s"Submitting application $appId to ResourceManager")
+      yarnClient.submitApplication(appContext)
+      launcherBackend.setAppId(appId.toString)
+      reportLauncherState(SparkAppHandle.State.SUBMITTED)
+
+
 16/10/30 23:19:37 INFO YarnClientImpl: Submitted application application_1473739536361_0484
+hadoop-yarn-client-2.6.5.jar/org.apache.hadoop.yarn.client.api.impl.YarnClientImpl.class
+
 16/10/30 23:19:37 INFO SchedulerExtensionServices: Starting Yarn extension services with app application_1473739536361_0484 and attemptId None
+
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.scheduler.cluster.SchedulerExtensionServices
+  /**
+   * Binding operation will load the named services and call bind on them too; the
+   * entire set of services are then ready for `init()` and `start()` calls.
+   *
+   * @param binding binding to the spark application and YARN
+   */
+  def start(binding: SchedulerExtensionServiceBinding): Unit = {
+    if (started.getAndSet(true)) {
+      logWarning("Ignoring re-entrant start operation")
+      return
+    }
+    require(binding.sparkContext != null, "Null context parameter")
+    require(binding.applicationId != null, "Null appId parameter")
+    this.binding = binding
+    val sparkContext = binding.sparkContext
+    val appId = binding.applicationId
+    val attemptId = binding.attemptId
+    logInfo(s"Starting Yarn extension services with app $appId and attemptId $attemptId")
+
+	
+
 16/10/30 23:19:38 INFO Client: Application report for application_1473739536361_0484 (state: ACCEPTED)
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.deploy.yarn.Client.scala
+invoked by client().run
+  def monitorApplication(
+      appId: ApplicationId,
+      returnOnRunning: Boolean = false,
+      logApplicationReport: Boolean = true,
+      interval: Long = sparkConf.get(REPORT_INTERVAL)):
+      (YarnApplicationState, FinalApplicationStatus) = {
+    var lastState: YarnApplicationState = null
+    while (true) {
+      Thread.sleep(interval)
+      val report: ApplicationReport =
+        try {
+          getApplicationReport(appId)
+        } catch {
+          case e: ApplicationNotFoundException =>
+            logError(s"Application $appId not found.")
+            cleanupStagingDir(appId)
+            return (YarnApplicationState.KILLED, FinalApplicationStatus.KILLED)
+          case NonFatal(e) =>
+            logError(s"Failed to contact YARN for application $appId.", e)
+            // Don't necessarily clean up staging dir because status is unknown
+            return (YarnApplicationState.FAILED, FinalApplicationStatus.FAILED)
+        }
+      val state = report.getYarnApplicationState
+
+      if (logApplicationReport) {
+        logInfo(s"Application report for $appId (state: $state)")
+
+
+
+
 16/10/30 23:19:38 INFO Client: 
 	 client token: N/A
 	 diagnostics: N/A
