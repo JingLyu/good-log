@@ -238,9 +238,33 @@ invoked by client().run
 	 final status: UNDEFINED
 	 tracking URL: http://node3:8088/proxy/application_1473739536361_0484/
 	 user: spiderdt
+	 
+	  //under the run function
+	  private def formatReportDetails(report: ApplicationReport): String = {
+
+	 
 16/10/30 23:19:39 INFO Client: Application report for application_1473739536361_0484 (state: ACCEPTED)
+  def run(): Unit = {
+    this.appId = submitApplication()
+    if (!launcherBackend.isConnected() && fireAndForget) {
+      val report = getApplicationReport(appId)
+      val state = report.getYarnApplicationState
+      logInfo(s"Application report for $appId (state: $state)")
+
+
 16/10/30 23:19:40 INFO YarnSchedulerBackend$YarnSchedulerEndpoint: ApplicationMaster registered as NettyRpcEndpointRef(null)
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.scheduler.cluster.YarnScheudlerBackend.scala
+
+   override def receive: PartialFunction[Any, Unit] = {
+      case RegisterClusterManager(am) =>
+        logInfo(s"ApplicationMaster registered as $am")
+        amEndpoint = Option(am)
+ 
+
 16/10/30 23:19:40 INFO YarnClientSchedulerBackend: Add WebUI Filter. org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter, Map(PROXY_HOSTS -> node3, PROXY_URI_BASES -> http://node3:8088/proxy/application_1473739536361_0484), /proxy/application_1473739536361_0484
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.scheduler.cluster.YarnClientScheudlerBackend.scala
+
+
 16/10/30 23:19:40 INFO JettyUtils: Adding filter: org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter
 16/10/30 23:19:40 INFO Client: Application report for application_1473739536361_0484 (state: RUNNING)
 16/10/30 23:19:40 INFO Client: 
@@ -254,13 +278,38 @@ invoked by client().run
 	 tracking URL: http://node3:8088/proxy/application_1473739536361_0484/
 	 user: spiderdt
 16/10/30 23:19:40 INFO YarnClientSchedulerBackend: Application application_1473739536361_0484 has started running.
+
+Run in : resource-manager/yarn/src/main/scala/org.apache.spark.scheduler.cluster.YarnClientScheudlerBackend.scala
+  private def waitForApplication(): Unit = {
+    val monitorInterval = conf.get(CLIENT_LAUNCH_MONITOR_INTERVAL)
+
+    assert(client != null && appId.isDefined, "Application has not been submitted yet!")
+    val (state, _) = client.monitorApplication(appId.get, returnOnRunning = true,
+      interval = monitorInterval) // blocking
+    if (state == YarnApplicationState.FINISHED ||
+      state == YarnApplicationState.FAILED ||
+      state == YarnApplicationState.KILLED) {
+      throw new SparkException("Yarn application has already ended! " +
+        "It might have been killed or unable to launch application master.")
+    }
+    if (state == YarnApplicationState.RUNNING) {
+      logInfo(s"Application ${appId.get} has started running.")
+    }
+  }
+
+
+
 16/10/30 23:19:40 INFO Utils: Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 38023.
+
 16/10/30 23:19:40 INFO NettyBlockTransferService: Server created on 192.168.1.2:38023
+
 16/10/30 23:19:40 INFO BlockManagerMaster: Registering BlockManager BlockManagerId(driver, 192.168.1.2, 38023)
 16/10/30 23:19:40 INFO BlockManagerMasterEndpoint: Registering block manager 192.168.1.2:38023 with 1938.6 MB RAM, BlockManagerId(driver, 192.168.1.2, 38023)
 16/10/30 23:19:40 INFO BlockManagerMaster: Registered BlockManager BlockManagerId(driver, 192.168.1.2, 38023)
 16/10/30 23:19:41 INFO ContextHandler: Started o.s.j.s.ServletContextHandler@54fef2c8{/metrics/json,null,AVAILABLE}
 16/10/30 23:19:43 INFO YarnSchedulerBackend$YarnDriverEndpoint: Registered executor NettyRpcEndpointRef(null) (192.168.1.6:59164) with ID 2
+
+
 16/10/30 23:19:43 INFO BlockManagerMasterEndpoint: Registering block manager node6:44946 with 2004.6 MB RAM, BlockManagerId(2, node6, 44946)
 16/10/30 23:19:44 INFO YarnSchedulerBackend$YarnDriverEndpoint: Registered executor NettyRpcEndpointRef(null) (192.168.1.5:49744) with ID 1
 16/10/30 23:19:44 INFO BlockManagerMasterEndpoint: Registering block manager node5:44089 with 2004.6 MB RAM, BlockManagerId(1, node5, 44089)
@@ -269,6 +318,7 @@ invoked by client().run
 16/10/30 23:19:44 INFO MemoryStore: Block broadcast_0_piece0 stored as bytes in memory (estimated size 20.7 KB, free 1938.4 MB)
 16/10/30 23:19:44 INFO BlockManagerInfo: Added broadcast_0_piece0 in memory on 192.168.1.2:38023 (size: 20.7 KB, free: 1938.6 MB)
 16/10/30 23:19:44 INFO SparkContext: Created broadcast 0 from wholeTextFiles at NativeMethodAccessorImpl.java:-2
+
 16/10/30 23:19:45 INFO FileInputFormat: Total input paths to process : 366
 16/10/30 23:19:45 INFO FileInputFormat: Total input paths to process : 366
 16/10/30 23:19:45 INFO CombineFileInputFormat: DEBUG: Terminated node allocation with : CompletedNodes: 4, size left: 191591058
